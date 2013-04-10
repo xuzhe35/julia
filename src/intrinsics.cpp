@@ -465,10 +465,10 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
                                ConstantInt::get(T_size,
                                     sizeof(void*)+size));
         builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
-                            emit_nthptr_addr(strct, (size_t)0));
+                            emit_nthptr_addr(strct, (ssize_t)-1));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size, size));
         thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
-        builder.CreateMemCpy(builder.CreateBitCast(emit_nthptr_addr(strct, (size_t)1), T_pint8),
+        builder.CreateMemCpy(builder.CreateBitCast(emit_nthptr_addr(strct, (ssize_t)0), T_pint8),
                             thePtr, size, 1);
         return mark_julia_type(strct, ety);
     }

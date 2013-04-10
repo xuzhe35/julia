@@ -73,8 +73,8 @@ typedef struct _bigval_t {
     };
 } bigval_t;
 
-#define gc_marked(o)  (((gcval_t*)(o))->marked)
-#define gc_setmark(o) (((gcval_t*)(o))->marked=1)
+#define gc_marked(o)  (((gcval_t*)(o)-1)->marked)
+#define gc_setmark(o) (((gcval_t*)(o)-1)->marked=1)
 #define gc_val_buf(o) ((gcval_t*)(((void**)(o))-1))
 #define gc_setmark_buf(o) gc_setmark(gc_val_buf(o))
 
@@ -132,7 +132,7 @@ void jl_gc_unpreserve(void)
 DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 {
     jl_weakref_t *wr = (jl_weakref_t*)alloc_2w();
-    wr->type = (jl_value_t*)jl_weakref_type;
+    jl_typeof(wr) = (jl_value_t*)jl_weakref_type;
     wr->value = value;
     arraylist_push(&weak_refs, wr);
     return wr;
@@ -249,11 +249,14 @@ static void *alloc_big(size_t sz)
     if (allocd_bytes > collect_interval) {
         jl_gc_collect();
     }
-    size_t offs = BVOFFS*sizeof(void*);
+    size_t offs = (1+BVOFFS)*sizeof(void*);
     if (sz+offs+15 < offs+15)  // overflow in adding offs, size was "negative"
         jl_throw(jl_memory_exception);
     size_t allocsz = (sz+offs+15) & -16;
     bigval_t *v = (bigval_t*)malloc_a16(allocsz);
+#ifdef MEMDEBUG
+    memset(v, 0xaa, allocsz);
+#endif
     allocd_bytes += allocsz;
     if (v == NULL)
         jl_throw(jl_memory_exception);
@@ -261,7 +264,7 @@ static void *alloc_big(size_t sz)
     v->flags = 0;
     v->next = big_objects;
     big_objects = v;
-    return &v->_data[0];
+    return (char*)(&v->_data[0])+sizeof(void*);
 }
 
 static void sweep_big(void)
@@ -374,7 +377,7 @@ static inline void *pool_alloc(pool_t *p)
     gcval_t *v = p->freelist;
     p->freelist = p->freelist->next;
     v->flags = 0;
-    return v;
+    return ((char*)v)+sizeof(void*);
 }
 
 static void sweep_pool(pool_t *p)
@@ -562,9 +565,9 @@ static void gc_mark_all()
             jl_value_t *owner = jl_array_data_owner(a);
             if (a->ismalloc) {
                 // jl_mallocptr_t
-                if (gc_marked(owner))
+                if (((gcval_t*)(owner))->marked)
                     continue;
-                gc_setmark(owner);
+                ((gcval_t*)(owner))->marked=1;
             }
             else {
                 // an array
@@ -617,7 +620,7 @@ static void gc_mark_all()
         int nf = (int)jl_tuple_len(dt->names);
         for(int i=0; i < nf; i++) {
             if (dt->fields[i].isptr) {
-                jl_value_t *fld = *(jl_value_t**)((char*)v + dt->fields[i].offset + sizeof(void*));
+                jl_value_t *fld = *(jl_value_t**)((char*)v + dt->fields[i].offset);
                 if (fld)
                     gc_push_root(fld);
             }
@@ -781,6 +784,7 @@ void jl_gc_collect(void)
 
 void *allocb(size_t sz)
 {
+    sz+=sizeof(void*);
     void *b;
     sz += sizeof(void*);
 #ifdef MEMDEBUG
@@ -798,6 +802,7 @@ void *allocb(size_t sz)
 
 void *allocobj(size_t sz)
 {
+    sz+=2*sizeof(void*);
 #ifdef MEMDEBUG
     return alloc_big(sz);
 #endif

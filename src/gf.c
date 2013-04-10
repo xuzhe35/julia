@@ -24,8 +24,8 @@
 
 static jl_methtable_t *new_method_table(jl_sym_t *name)
 {
-    jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
-    mt->type = (jl_value_t*)jl_methtable_type;
+    jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t)+sizeof(void*));
+    jl_typeof(mt) = (jl_value_t*)jl_methtable_type;
     mt->name = name;
     mt->defs = JL_NULL;
     mt->cache = JL_NULL;
@@ -1147,8 +1147,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         pl = &l->next;
         l = l->next;
     }
-    jl_methlist_t *newrec = (jl_methlist_t*)allocobj(sizeof(jl_methlist_t));
-    newrec->type = (jl_value_t*)jl_method_type;
+    jl_methlist_t *newrec = (jl_methlist_t*)allocobj(sizeof(jl_methlist_t)+sizeof(void*));
+    jl_typeof(newrec) = (jl_value_t*)jl_method_type;
     newrec->sig = type;
     newrec->tvars = tvars;
     newrec->va = (jl_tuple_len(type) > 0 &&
@@ -1322,8 +1322,8 @@ DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tuple_t *types)
 #ifdef JL_TRACE
 static int trace_en = 0;
 static int error_en = 1;
-static void __attribute__ ((unused)) enable_trace(int x) { trace_en=x; }
-static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
+DLLEXPORT void __attribute__ ((unused)) enable_trace(int x) { trace_en=x; }
+DLLEXPORT void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
     JL_PRINTF(JL_STDOUT, "%s(",  jl_gf_name(F)->name);
     for(size_t i=0; i < nargs; i++) {

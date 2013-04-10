@@ -258,7 +258,7 @@ static Value *emit_typeof(Value *p)
     if (p->getType() == jl_pvalue_llvmt) {
         Value *tt = builder.CreateBitCast(p, jl_ppvalue_llvmt);
         tt = builder.
-            CreateLoad(builder.CreateGEP(tt,ConstantInt::get(T_size,0)),
+            CreateLoad(builder.CreateGEP(tt,ConstantInt::get(T_size,-1)),
                        false);
 #ifdef OVERLAP_TUPLE_LEN
         tt = builder.
@@ -401,7 +401,7 @@ static void emit_func_check(Value *x, jl_codectx_t *ctx)
 
 // --- loading and storing ---
 
-static Value *emit_nthptr_addr(Value *v, size_t n)
+static Value *emit_nthptr_addr(Value *v, ssize_t n)
 {
     return builder.CreateGEP(builder.CreateBitCast(v, jl_ppvalue_llvmt),
                              ConstantInt::get(T_size, n));
@@ -412,7 +412,7 @@ static Value *emit_nthptr_addr(Value *v, Value *idx)
     return builder.CreateGEP(builder.CreateBitCast(v, jl_ppvalue_llvmt), idx);
 }
 
-static Value *emit_nthptr(Value *v, size_t n)
+static Value *emit_nthptr(Value *v, ssize_t n)
 {
     // p = (jl_value_t**)v; p[n]
     Value *vptr = emit_nthptr_addr(v, n);
@@ -542,11 +542,11 @@ type_of_constant:
 static Value *emit_tuplelen(Value *t)
 {
 #ifdef OVERLAP_TUPLE_LEN
-    Value *lenbits = emit_nthptr(t, (size_t)0);
+    Value *lenbits = emit_nthptr(t, (ssize_t)-1);
     return builder.CreateLShr(builder.CreatePtrToInt(lenbits, T_int64),
                               ConstantInt::get(T_int32, 52));
 #else
-    Value *lenbits = emit_nthptr(t, 1);
+    Value *lenbits = emit_nthptr(t, (ssize_t)0);
     return builder.CreatePtrToInt(lenbits, T_size);
 #endif
 }
@@ -568,17 +568,18 @@ static Value *emit_arraysize(Value *t, Value *dim)
 {
 #ifdef STORE_ARRAY_LEN
 #ifdef _P64
-    int o = 3;
-#else
-    int o = 4;
-#endif
-#else
-#ifdef _P64
     int o = 2;
 #else
     int o = 3;
 #endif
+#else
+#ifdef _P64
+    int o = 1;
+#else
+    int o = 2;
 #endif
+#endif
+//TODO:    assert(o == offsetof(jl_array_t, nrows)/sizeof(void*));
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
                                          ConstantInt::get(dim->getType(), o)));
@@ -608,7 +609,7 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
 {
 #ifdef STORE_ARRAY_LEN
     (void)ty;
-    Value *lenbits = emit_nthptr(t, 2);
+    Value *lenbits = emit_nthptr(t, 1);
     return builder.CreatePtrToInt(lenbits, T_size);
 #else
     jl_value_t *p1 = jl_tparam1(ty);
@@ -640,7 +641,7 @@ static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
 
 static Value *emit_arrayptr(Value *t)
 {
-    return emit_nthptr(t, 1);
+    return emit_nthptr(t, (ssize_t)0);
 }
 
 static Value *emit_arrayptr(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
@@ -669,10 +670,16 @@ static void assign_arrayvar(jl_arrayvar_t &av, Value *ar)
     builder.CreateStore(emit_arraysize(ar,1), av.nr);
 }
 
+static Value *type_pointer(Value *x)
+{
+    return builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
+                             ConstantInt::get(T_size, -1));
+}
+
 static Value *data_pointer(Value *x)
 {
     return builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
-                             ConstantInt::get(T_size, 1));
+                             ConstantInt::get(T_size, 0));
 }
 
 static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_t **args,
@@ -732,7 +739,7 @@ static Value *tpropagate(Value *a, Value *b)
 
 static Value *init_bits_value(Value *newv, Value *jt, Type *t, Value *v)
 {
-    builder.CreateStore(jt, builder.CreateBitCast(newv, jl_ppvalue_llvmt));
+    builder.CreateStore(jt, type_pointer(newv));
     builder.CreateStore(v , builder.CreateBitCast(data_pointer(newv),
                                                   PointerType::get(t,0)));
     return newv;

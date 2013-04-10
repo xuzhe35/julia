@@ -255,14 +255,14 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             return builder.CreateBitCast(emit_arrayptr(jv), ty);
         }
         if (aty == (jl_value_t*)jl_ascii_string_type || aty == (jl_value_t*)jl_utf8_string_type) {
-            return builder.CreateBitCast(emit_arrayptr(emit_nthptr(jv,1)), ty);
+            return builder.CreateBitCast(emit_arrayptr(emit_nthptr(jv,(ssize_t)0)), ty);
         }
         if (jl_is_structtype(aty) && jl_is_leaf_type(aty) && !jl_is_array_type(aty)) {
             if (!addressOf) {
                 emit_error("ccall: expected addressOf operator", ctx);
                 return literal_pointer_val(jl_nothing);
             }
-            return builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), ty); // skip type tag field
+            return builder.CreateBitCast(emit_nthptr_addr(jv, (ssize_t)0), ty); // skip type tag field
         }
         Value *p = builder.CreateCall4(value_to_pointer_func,
                                        literal_pointer_val(jl_tparam0(jt)), jv,
@@ -285,7 +285,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         //if (!jl_is_structtype(aty))
         //    emit_typecheck(emit_typeof(jv), (jl_value_t*)jl_struct_kind, "ccall: Struct argument called with something that isn't a struct", ctx);
         // //safe thing would be to also check that jl_typeof(aty)->size > sizeof(ty) here and/or at runtime
-        Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), PointerType::get(ty,0));
+        Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, (ssize_t)0), PointerType::get(ty,0));
         return builder.CreateLoad(pjv, false);
     }
     // TODO: error for & with non-pointer argument type
@@ -628,10 +628,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                ConstantInt::get(T_size,
                                     sizeof(void*)+((jl_datatype_t*)rt)->size));
         builder.CreateStore(literal_pointer_val((jl_value_t*)rt),
-                            emit_nthptr_addr(strct, (size_t)0));
+                            emit_nthptr_addr(strct, (ssize_t)-1));
         builder.CreateStore(result,
                             builder.CreateBitCast(
-                                emit_nthptr_addr(strct, (size_t)1),
+                                emit_nthptr_addr(strct, (ssize_t)0),
                                 PointerType::get(lrt,0)));
         return mark_julia_type(strct, rt);
     }

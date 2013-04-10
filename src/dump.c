@@ -150,7 +150,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
             if (!(b->owner != m && m == jl_main_module)) {
                 jl_serialize_value(s, b->name);
                 jl_serialize_value(s, b->value);
-                jl_serialize_value(s, b->type);
+                jl_serialize_value(s, jl_typeof(b));
                 jl_serialize_value(s, b->owner);
                 write_int8(s, (b->constp<<2) | (b->exportp<<1) | (b->imported));
             }
@@ -624,7 +624,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
                 break;
             jl_binding_t *b = jl_get_binding_wr(m, (jl_sym_t*)name);
             b->value = jl_deserialize_value(s);
-            b->type = (jl_value_t*)jl_deserialize_value(s);
+            jl_typeof(b) = (jl_value_t*)jl_deserialize_value(s);
             b->owner = (jl_module_t*)jl_deserialize_value(s);
             int8_t flags = read_int8(s);
             b->constp = (flags>>2) & 1;
@@ -674,7 +674,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
                 case 8: v = jl_box64(dt, *(int64_t*)data); break;
                 default:
                     v = (jl_value_t*)allocobj(sizeof(void*)+nby);
-                    v->type = (jl_value_t*)dt;
+                    jl_typeof(v) = (jl_value_t*)dt;
                     memcpy(jl_data_ptr(v), data, nby);
                 }
             }

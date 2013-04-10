@@ -7,17 +7,23 @@ include = Core.include
 
 include("exports.jl")
 
+include("base.jl")
 if false
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     length(a::Array) = arraylen(a)
     print(x) = print(STDOUT, x)
     show(x) = show(STDOUT, x)
-    write(io::IO, a::Array{Uint8,1}) =
-        ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
-              io.ios, a, length(a))
+    
+    write{T}(io::IO, a::Array{T}) =
+          if T === Uint8
+            ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
+              io.handle, a, length(a))
+          else
+              write(io, "array?")
+          end
     print(io::IO, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void},Any,),
-                                 io.ios, s)
+                                 io.handle, s)
     print(io::IO, s::ASCIIString) = (write(io, s.data);nothing)
     print(io::IO, x) = show(io, x)
     println(io::IO, x) = (print(io, x); print(io, "\n"))
@@ -41,7 +47,6 @@ end
 
 ## Load essential files and libraries
 
-include("base.jl")
 include("build_h.jl")
 include("c.jl")
 

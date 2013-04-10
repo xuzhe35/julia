@@ -322,7 +322,7 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
                               li->name->name);
                 }
                 if (!jl_types_equal(astrt, rt) &&
-                    !(astrt==(jl_value_t*)jl_nothing->type && rt==(jl_value_t*)jl_bottom_type)) {
+                    !(astrt==jl_typeof(jl_nothing) && rt==(jl_value_t*)jl_bottom_type)) {
                     if (astrt == (jl_value_t*)jl_bottom_type) {
                         jl_errorf("cfunction: %s does not return", li->name->name);
                     }
@@ -787,9 +787,9 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         if (it != ctx->closureEnv->end()) {
             int idx = (*it).second;
 #ifdef OVERLAP_TUPLE_LEN
-            val = emit_nthptr((Value*)ctx->envArg, idx+1);
+            val = emit_nthptr((Value*)ctx->envArg, idx);
 #else
-            val = emit_nthptr((Value*)ctx->envArg, idx+2);
+            val = emit_nthptr((Value*)ctx->envArg, idx+1);
 #endif
         }
         else {
@@ -863,7 +863,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                 Value *addr =
                     builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
                                       ConstantInt::get(T_size,
-                                                       sty->fields[idx].offset + sizeof(void*)));
+                                                       sty->fields[idx].offset));
                 JL_GC_POP();
                 if (sty->fields[idx].isptr) {
                     Value *fldv = builder.CreateLoad(builder.CreateBitCast(addr,jl_ppvalue_llvmt));
@@ -911,7 +911,7 @@ static void emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx,
     if (sty->mutabl || !checked) {
         Value *addr =
             builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
-                              ConstantInt::get(T_size, sty->fields[idx].offset + sizeof(void*)));
+                              ConstantInt::get(T_size, sty->fields[idx].offset));
         jl_value_t *jfty = jl_tupleref(sty->types, idx);
         if (sty->fields[idx].isptr) {
             builder.CreateStore(boxed(rhs),
@@ -1163,9 +1163,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     // known to be in bounds
                     JL_GC_POP();
 #ifdef OVERLAP_TUPLE_LEN
-                    return emit_nthptr(arg1, idx);
+                    return emit_nthptr(arg1, idx-1);
 #else
-                    return emit_nthptr(arg1, idx+1);
+                    return emit_nthptr(arg1, idx);
 #endif
                 }
                 if (idx==0 || (!isseqt && idx > tlen)) {
@@ -1182,10 +1182,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             emit_bounds_check(idx, tlen, ctx);
             JL_GC_POP();
 #ifdef OVERLAP_TUPLE_LEN
-            return emit_nthptr(arg1, idx);
-#else
             return emit_nthptr(arg1,
-                               builder.CreateAdd(idx, ConstantInt::get(T_size,1)));
+                   builder.CreateSub(idx, ConstantInt::get(T_size,1)));
+#else
+            return emit_nthptr(arg1, idx);
 #endif
         }
     }
@@ -1227,9 +1227,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             builder.CreateCall(jlallocobj_func,
                                ConstantInt::get(T_size, sizeof(void*)*nwords));
 #ifdef OVERLAP_TUPLE_LEN
-        builder.CreateStore(arg1, emit_nthptr_addr(tup, 1));
+        builder.CreateStore(arg1, emit_nthptr_addr(tup, 0));
 #else
-        builder.CreateStore(arg1, emit_nthptr_addr(tup, 2));
+        builder.CreateStore(arg1, emit_nthptr_addr(tup, 1));
 #endif
         ctx->argDepth--;
         make_gcroot(tup, ctx);
@@ -1238,18 +1238,18 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             CreateStore(builder.
                         CreateOr(builder.CreatePtrToInt(literal_pointer_val((jl_value_t*)jl_tuple_type), T_int64),
                                  ConstantInt::get(T_int64, nargs<<52)),
-                        builder.CreateBitCast(emit_nthptr_addr(tup, (size_t)0),
+                        builder.CreateBitCast(emit_nthptr_addr(tup, (ssize_t)-1),
                                               T_pint64));
 #else
         builder.CreateStore(literal_pointer_val((jl_value_t*)jl_tuple_type),
-                            emit_nthptr_addr(tup, (size_t)0));
+                            emit_nthptr_addr(tup, (ssize_t)-1));
         builder.CreateStore(literal_pointer_val((jl_value_t*)nargs),
-                            emit_nthptr_addr(tup, (size_t)1));
+                            emit_nthptr_addr(tup, (ssize_t)0));
 #endif
 #ifdef OVERLAP_TUPLE_LEN
-        size_t offs = 1;
+        size_t offs = 0;
 #else
-        size_t offs = 2;
+        size_t offs = 1;
 #endif
         for(i=1; i < nargs; i++) {
             builder.CreateStore(V_null,
@@ -1514,7 +1514,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         }
         // extract pieces of the function object
         // TODO: try extractvalue instead
-        theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
+        theFptr = builder.CreateBitCast(emit_nthptr(theFunc, (ssize_t)0), jl_fptr_llvmt);
         theF = theFunc;
     }
     else {
@@ -1592,21 +1592,21 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
         int idx = (*it).second;
         if (isBoxed(s->name, ctx)) {
 #ifdef OVERLAP_TUPLE_LEN
-            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+1), 1);
+            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx), (ssize_t)0);
 #else
-            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+2), 1);
+            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+1), (ssize_t)0);
 #endif
         }
 #ifdef OVERLAP_TUPLE_LEN
-        return emit_nthptr_addr((Value*)ctx->envArg, idx+1);
+        return emit_nthptr_addr((Value*)ctx->envArg, idx);
 #else
-        return emit_nthptr_addr((Value*)ctx->envArg, idx+2);
+        return emit_nthptr_addr((Value*)ctx->envArg, idx+1);
 #endif
     }
     Value *l = (*ctx->vars)[s->name];
     if (l != NULL) {
         if (isBoxed(s->name, ctx)) {
-            return emit_nthptr_addr(builder.CreateLoad(l,false), 1);
+            return emit_nthptr_addr(builder.CreateLoad(l,false), (ssize_t)0);
         }
         return l;
     }
@@ -1881,9 +1881,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         Value *bp;
         if (iskw) {
             // fenv = theF->env
-            Value *fenv = emit_nthptr(theF, 2);
+            Value *fenv = emit_nthptr(theF, 1);
             // bp = &((jl_methtable_t*)fenv)->kwsorter
-            bp = emit_nthptr_addr(fenv, 7);
+            bp = emit_nthptr_addr(fenv, 6);
         }
         else if (theF != NULL) {
             bp = make_gcroot(theF, ctx);
@@ -1962,7 +1962,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                                        ConstantInt::get(T_size,
                                                         sizeof(void*)+sty->size));
                 builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
-                                    emit_nthptr_addr(strct, (size_t)0));
+                                    emit_nthptr_addr(strct, (ssize_t)-1));
                 for(size_t i=0; i < nf; i++) {
                     if (sty->fields[i].isptr) {
                         emit_setfield(sty, strct, i, V_null, ctx, false);
@@ -2258,7 +2258,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
             fsig.push_back(julia_type_to_llvm(jl_tupleref(lam->specTypes,i)));
         }
-        Type *rt = (jlrettype == (jl_value_t*)jl_nothing->type ? T_void : julia_type_to_llvm(jlrettype));
+        Type *rt = (jlrettype == jl_typeof(jl_nothing) ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
                              Function::ExternalLinkage, funcName, jl_Module);
         if (lam->cFunctionObject == NULL) {
@@ -2383,7 +2383,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     // fetch env out of function object if we need it
     if (hasCapt) {
-        ctx.envArg = emit_nthptr(fArg, 2);
+        ctx.envArg = emit_nthptr(fArg, 1);
     }
 
     // step 8. set up GC frame
@@ -2766,11 +2766,12 @@ extern "C" jl_value_t *jl_new_box(jl_value_t *v)
 {
     jl_value_t *box = (jl_value_t*)alloc_2w();
 #ifdef OVERLAP_TUPLE_LEN
-    box->type = (size_t)jl_box_any_type;
+    jl_typeof(box) = (size_t)jl_box_any_type;
+#error
 #else
-    box->type = jl_box_any_type;
+    jl_typeof(box) = jl_box_any_type;
 #endif
-    ((jl_value_t**)box)[1] = v;
+    ((jl_value_t**)box)[0] = v;
     return box;
 }
 

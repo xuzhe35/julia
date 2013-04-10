@@ -51,7 +51,7 @@ static jl_array_t *_new_array(jl_value_t *atype,
     }
 
     int ndimwords = jl_array_ndimwords(ndims);
-    size_t tsz = sizeof(jl_array_t)-sizeof(void*);
+    size_t tsz = sizeof(jl_array_t);
     tsz += ndimwords*sizeof(size_t);
     if (tot <= ARRAY_INLINE_NBYTES) {
         size_t basesz = tsz;
@@ -65,10 +65,10 @@ static jl_array_t *_new_array(jl_value_t *atype,
         }
         tsz = (tsz+15)&-16; // align whole object 16
         a = allocobj(tsz);
-        a->type = atype;
+        jl_typeof(a) = atype;
         a->ismalloc = 0;
         a->isinline = 1;
-        data = (char*)a + doffs;
+        data = (char*)a + doffs - sizeof(void*);
         if (tot > 0 && !isunboxed) {
             memset(data, 0, tot);
         }
@@ -81,7 +81,7 @@ static jl_array_t *_new_array(jl_value_t *atype,
         tsz = (tsz+15)&-16; // align whole object size 16
         a = allocobj(tsz);
         JL_GC_PUSH(&a);
-        a->type = atype;
+        jl_typeof(a) = atype;
         a->ismalloc = 1;
         a->isinline = 0;
         // temporarily initialize to make gc-safe
@@ -126,8 +126,8 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data,
     size_t ndims = jl_tuple_len(dims);
 
     int ndimwords = jl_array_ndimwords(ndims);
-    a = allocobj((sizeof(jl_array_t) + ndimwords*sizeof(size_t) + 15)&-16);
-    a->type = atype;
+    a = allocobj((sizeof(jl_array_t) + sizeof(void*) + ndimwords*sizeof(size_t) + 15)&-16);
+    jl_typeof(a) = atype;
     a->ndims = ndims;
     a->data = NULL;
     a->isinline = 0;
@@ -218,8 +218,8 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
     else
         elsz = sizeof(void*);
 
-    a = allocobj((sizeof(jl_array_t)+jl_array_ndimwords(1)*sizeof(size_t)+15)&-16);
-    a->type = atype;
+    a = allocobj((sizeof(jl_array_t)+sizeof(void*)+jl_array_ndimwords(1)*sizeof(size_t)+15)&-16);
+    jl_typeof(a) = atype;
     a->data = data;
 #ifdef STORE_ARRAY_LEN
     a->length = nel;
@@ -264,8 +264,8 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
         elsz = sizeof(void*);
 
     int ndimwords = jl_array_ndimwords(ndims);
-    a = allocobj((sizeof(jl_array_t) + ndimwords*sizeof(size_t)+15)&-16);
-    a->type = atype;
+    a = allocobj((sizeof(jl_array_t) + sizeof(void*) + ndimwords*sizeof(size_t)+15)&-16);
+    jl_typeof(a) = atype;
     a->data = data;
 #ifdef STORE_ARRAY_LEN
     a->length = nel;
@@ -344,7 +344,7 @@ jl_value_t *jl_array_to_string(jl_array_t *a)
     jl_datatype_t* string_type = u8_isvalid(a->data, jl_array_len(a)) == 1 ? // ASCII
         jl_ascii_string_type : jl_utf8_string_type;
     jl_value_t *s = alloc_2w();
-    s->type = (jl_value_t*)string_type;
+    jl_typeof(s) = (jl_value_t*)string_type;
     jl_set_nth_field(s, 0, (jl_value_t*)a);
     return s;
 }

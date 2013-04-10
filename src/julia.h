@@ -45,14 +45,7 @@
 // stored and not total length, to save space.
 #define STORE_ARRAY_LEN
 
-#ifdef OVERLAP_TUPLE_LEN
-#define JL_DATA_TYPE    \
-    size_t type : 52;   \
-    size_t _resvd : 12;
-#else
-#define JL_DATA_TYPE \
-    struct _jl_value_t *type;
-#endif
+#define JL_DATA_TYPE
 
 typedef struct _jl_value_t {
     JL_DATA_TYPE
@@ -71,8 +64,8 @@ typedef struct _jl_sym_t {
 
 typedef struct {
 #ifdef OVERLAP_TUPLE_LEN
-    size_t type : 52;
-    size_t length : 12;
+    //size_t type : 52;
+    //size_t length : 12;
 #else
     JL_DATA_TYPE
     size_t length;
@@ -184,7 +177,7 @@ typedef struct _jl_lambda_info_t {
     void *cFunctionObject; // c callable llvm Function
 } jl_lambda_info_t;
 
-#define LAMBDA_INFO_NW (NWORDS(sizeof(jl_lambda_info_t))-1)
+#define LAMBDA_INFO_NW (NWORDS(sizeof(jl_lambda_info_t)))
 
 #define JL_FUNC_FIELDS                          \
     jl_fptr_t fptr;                             \
@@ -471,16 +464,16 @@ extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 void *allocb(size_t sz);
 void *allocobj(size_t sz);
 #else
-#define allocb(nb)    malloc(nb)
-#define allocobj(nb)  malloc(nb)
+#define allocb(nb)    ((void*)((char*)malloc(nb)+sizeof(void*)))
+#define allocobj(nb)  ((void*)((char*)malloc(nb)+sizeof(void*)))
 #endif
 
 #ifdef OVERLAP_TUPLE_LEN
+#define jl_tupleref(t,i) (((jl_value_t**)(t))[i])
+#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[i])=(jl_value_t*)(x))
+#else
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[1+(i)])
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[1+(i)])=(jl_value_t*)(x))
-#else
-#define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
-#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(jl_value_t*)(x))
 #endif
 #define jl_t0(t) jl_tupleref(t,0)
 #define jl_t1(t) jl_tupleref(t,1)
@@ -494,9 +487,9 @@ void *allocobj(size_t sz);
 
 #define jl_symbolnode_sym(s) ((jl_sym_t*)jl_fieldref(s,0))
 #define jl_symbolnode_type(s) (jl_fieldref(s,1))
-#define jl_linenode_line(x) (((ptrint_t*)x)[1])
-#define jl_labelnode_label(x) (((ptrint_t*)x)[1])
-#define jl_gotonode_label(x) (((ptrint_t*)x)[1])
+#define jl_linenode_line(x) (((ptrint_t*)x)[0])
+#define jl_labelnode_label(x) (((ptrint_t*)x)[0])
+#define jl_gotonode_label(x) (((ptrint_t*)x)[0])
 #define jl_getfieldnode_val(s) (jl_fieldref(s,0))
 #define jl_getfieldnode_name(s) ((jl_sym_t*)jl_fieldref(s,1))
 #define jl_getfieldnode_type(s) (jl_fieldref(s,2))
@@ -505,9 +498,9 @@ void *allocobj(size_t sz);
 #define jl_tparam1(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 1)
 
 #ifdef OVERLAP_TUPLE_LEN
-#define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t*)(v))->type & 0x000ffffffffffffeULL))
+#define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t**)(v))[-1]) & 0x000ffffffffffffeULL))
 #else
-#define jl_typeof(v) (((jl_value_t*)(v))->type)
+#define jl_typeof(v) (((jl_value_t**)(v))[-1])
 #endif
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 
@@ -559,14 +552,14 @@ void *allocobj(size_t sz);
 #define jl_tuple_len(t)   (((jl_tuple_t*)(t))->length)
 #define jl_tuple_set_len_unsafe(t,n) (((jl_tuple_t*)(t))->length=(n))
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
-#define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
-#define jl_iostr_data(s)  ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
+#define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[0])->data)
+#define jl_iostr_data(s)  ((char*)((jl_array_t*)((jl_value_t**)(s))[0])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)((jl_function_t*)(f))->env)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // get a pointer to the data in a datatype
-#define jl_data_ptr(v)  (&((void**)(v))[1])
+#define jl_data_ptr(v)  (&((void**)(v))[0])
 
 static inline int jl_is_bitstype(void *v)
 {

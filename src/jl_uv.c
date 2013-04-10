@@ -255,7 +255,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
     if (!handle)
        return;
-    if (handle->type==UV_TTY)
+    if (handle->type == UV_TTY)
         uv_tty_set_mode((uv_tty_t*)handle,0);
     uv_close(handle,&closeHandle);
 }
@@ -422,8 +422,8 @@ static void jl_free_buffer(uv_write_t* req, int status)
 
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
-    if (stream!=0) {
-        if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
+    if (stream != 0) {
+        if (stream->type < UV_HANDLE_TYPE_MAX) { //is uv handle
             JL_SIGATOMIC_BEGIN();
             uv_write_t *uvw = malloc(sizeof(uv_write_t));
             uvw->data=0;
@@ -445,7 +445,7 @@ DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
     //TODO: BAD!! Needed because Julia can't yet detect null stdio
     if (stream == 0)
         return 0;
-    if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
+    if (stream->type < UV_HANDLE_TYPE_MAX) { //is uv handle
         JL_SIGATOMIC_BEGIN();
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
         char *data = malloc(n);

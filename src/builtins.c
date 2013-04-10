@@ -662,7 +662,7 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
 // comma_one prints a comma for 1 element, e.g. "(x,)"
 void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_one)
 {
-    JL_STREAM *s = ((JL_STREAM**)st)[1];
+    JL_STREAM *s = ((JL_STREAM**)st)[0];
     JL_PUTC(opn, s);
     size_t i, n=jl_tuple_len(t);
     for(i=0; i < n; i++) {
@@ -685,7 +685,7 @@ static void show_function(JL_STREAM *s, jl_value_t *v)
 
 static void show_type(jl_value_t *st, jl_value_t *t)
 {
-    uv_stream_t *s =((uv_stream_t**)st)[1];
+    uv_stream_t *s =((uv_stream_t**)st)[0];
     if (jl_is_uniontype(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
             JL_WRITE(s, "None", 4);
@@ -717,7 +717,7 @@ static void show_type(jl_value_t *st, jl_value_t *t)
 
 DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
 {
-    uv_stream_t *s = ((uv_stream_t**)str)[1];
+    uv_stream_t *s = ((uv_stream_t**)str)[0];
     // fallback for printing some other builtin types
     if (jl_is_tuple(v)) {
         jl_show_tuple(str, (jl_tuple_t*)v, '(', ')', 1);
