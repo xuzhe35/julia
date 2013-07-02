@@ -465,18 +465,17 @@ end
 
 ##
 
-function listen(host::IPv4, port::Uint16; backlog::Integer=511)
+function listen(addr; backlog::Integer=50)
     sock = TcpServer()
-    uv_error("listen",!bind(sock,host,port))
+    uv_error("listen",!bind(sock,addr))
     uv_error("listen",!listen!(sock;backlog=backlog))
     sock
 end
-listen(port::Integer; backlog::Integer=511) = listen(IPv4(uint32(0)),uint16(port);backlog=backlog)
-listen(addr::InetAddr; backlog::Integer=511) = listen(addr.host,addr.port;backlog=backlog)
-listen(host::IpAddr, port::Uint16; backlog::Integer=511) = listen(InetAddr(host,port);backlog=backlog)
+listen(port::Integer; backlog::Integer=50) = listen(IPv4(uint32(0)),uint16(port);backlog=backlog)
+listen(host::IpAddr, port::Integer; backlog::Integer=50) = listen(InetAddr(host,uint16(port));backlog=backlog)
 
-listen(cb::Callback,args...; backlog::Integer=511) = (sock=listen(args...;backlog=backlog);sock.ccb=cb;sock)
-listen(cb::Callback,sock::Socket; backlog::Integer=511) = (sock.ccb=cb;listen(sock;backlog=backlog))
+listen(cb::Callback,args...; backlog::Integer=50) = (sock=listen(args...;backlog=backlog);sock.ccb=cb;sock)
+listen(cb::Callback,sock::Socket; backlog::Integer=50) = (sock.ccb=cb;listen(sock;backlog=backlog))
 
 ##
 

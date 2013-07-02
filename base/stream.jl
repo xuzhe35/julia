@@ -556,7 +556,7 @@ function accept(server::UVServer, client::AsyncStream)
     end
 end
 
-function listen!(sock::UVServer; backlog::Integer=511)
+function listen!(sock::UVServer; backlog::Integer=50)
     err = ccall(:jl_listen, Int32, (Ptr{Void}, Int32), sock.handle, backlog)
     err != -1 ? (sock.open = true): false
 end
