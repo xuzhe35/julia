@@ -293,6 +293,7 @@ typedef BOOL (WINAPI *GLPI)(PSYSTEM_LOGICAL_PROCESSOR_INFORMATION,
 
 DLLEXPORT int jl_cpu_cores(void)
 {
+// BSD-types (including OSX) use this
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
     int32_t count;
@@ -304,8 +305,38 @@ DLLEXPORT int jl_cpu_cores(void)
         if (count < 1) { count = 1; }
     }
     return count;
+// Linux-types use this
 #elif defined(_SC_NPROCESSORS_ONLN)
     return sysconf(_SC_NPROCESSORS_ONLN);
+#elif defined(_OS_WINDOWS_)
+    //Try to get WIN7 API method
+    GAPC gapc = (GAPC) jl_dlsym_e(jl_kernel32_handle,
+                                  "GetActiveProcessorCount");
+
+    if (gapc) {
+        return gapc(ALL_PROCESSOR_GROUPS);
+    }
+    else { //fall back on GetSystemInfo
+        SYSTEM_INFO info;
+        GetSystemInfo(&info);
+        return info.dwNumberOfProcessors;
+    }
+#else
+    return 1;
+#endif
+}
+
+DLLEXPORT int jl_cpu_physical_cores(void)
+{
+    int cores = 0;
+
+#if defined(_OS_DARWIN_)
+    size_t size = sizeof(count);
+    if (sysctlbyname("hw.physicalcpu", &cores, &size, NULL, 0) == 0)
+        return cores;
+#elif defined(_OS_LINUX_)
+    // There doesn't seem to be an easy way to get this on Linux short of reading /proc/cputinfo
+    // just return jl_cpu_cores() for now
 #elif defined(_OS_WINDOWS_)
     GLPI glpi = (GLPI) jl_dlsym_e(jl_kernel32_handle,
                                   "GetLogicalProcessorInformation");
@@ -313,7 +344,6 @@ DLLEXPORT int jl_cpu_cores(void)
     if (glpi) {
         PSYSTEM_LOGICAL_PROCESSOR_INFORMATION buffer = NULL, ptr = NULL;
         DWORD bufferLength = 0;
-        int cores = 0;
 
         // Call once to get buffer length
         glpi(buffer, &bufferLength);
@@ -334,25 +364,14 @@ DLLEXPORT int jl_cpu_cores(void)
             ptr++;
         }
 
-        return cores;
+        // Workaround WINE advertising glpi but not implementing it!
+        if( cores )
+            return cores;
     }
-
-    //Try to get WIN7 API method
-    GAPC gapc = (GAPC) jl_dlsym_e(jl_kernel32_handle,
-                                  "GetActiveProcessorCount");
-
-    if (gapc) {
-        return gapc(ALL_PROCESSOR_GROUPS);
-    }
-    else { //fall back on GetSystemInfo
-        SYSTEM_INFO info;
-        GetSystemInfo(&info);
-        return info.dwNumberOfProcessors;
-    }
-#else
-    return 1;
 #endif
+    return jl_cpu_cores();
 }
+
 
 // -- high resolution timers --
 // Returns time in nanosec

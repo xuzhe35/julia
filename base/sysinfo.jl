@@ -23,6 +23,11 @@ function init()
         ENV["JULIA_CPU_CORES"] :
         ccall(:jl_cpu_cores, Int32, ())
     )
+    global const CPU_PHYSICAL_CORES = int(
+        haskey(ENV,"JULIA_CPU_PHYSICAL_CORES") ?
+        ENV["JULIA_CPU_PHYSICAL_CORES"] :
+        ccall(:jl_cpu_physical_cores, Int32, ())
+    )
     global const SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
 end
 
