@@ -144,8 +144,27 @@ else
     const dlext = "so"
 end
 
-# This is deprecated!  use dlext instead!
-const shlib_ext = dlext
+immutable DeprecatedString <: DirectIndexString
+    oldname::String
+    newname::String
+    data::String
+end
+
+import Base.endof, Base.next, Base.show
+
+function endof(s::DeprecatedString)
+    warn("$(s.oldname) is deprecated, use $(s.newname) instead.", once=true)
+    endof(s.data)
+end
+next(s::DeprecatedString, i::Int) = next(s.data,i)
+
+function show(io::IO, s::DeprecatedString)
+    warn("$(s.oldname) is deprecated, use $(s.newname) instead.", once=true)
+    show(io, s.data)
+end
+
+# shlib_ext is deprecated!  use dlext instead!
+const shlib_ext = DeprecatedString( "Sys.shlib_ext", "Sys.dlext", dlext )
 
 @linux_only begin
     immutable dl_phdr_info
