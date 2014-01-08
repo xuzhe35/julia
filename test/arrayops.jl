@@ -51,7 +51,7 @@ a = reshape(b, (2, 2, 2, 2, 2))
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
 tmp = A[2:6]
-@test tmp == [2:6]
+@test tmp == [2:6;]
 tmp = A[1:3,2,2:4]
 @test tmp == cat(3,46:48,86:88,126:128)
 tmp = A[:,7:-3:1,5]
@@ -123,7 +123,7 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 
 # sub logical indexing #4763
-A = sub([1:10], 5:8)
+A = sub(1:10, 5:8)
 @test A[A.<7] == [5, 6]
 B = reshape(1:16, 4, 4)
 sB = sub(B, 2:3, 2:3)
@@ -153,7 +153,7 @@ sA = slice(A, 1:2:3, 3, 1:2:8)
 @test strides(sA) == (2,30)
 @test sA[:] == A[sA.indexes...][:]
 
-a = [5:8]
+a = 5:8
 @test parent(a) == a
 @test parentindexes(a) == (1:4,)
 
@@ -193,13 +193,13 @@ let
     @test x == -12
     X = get(A, -5:5, nan(Float32))
     @test eltype(X) == Float32
-    @test isnan(X) == [trues(6),falses(5)]
+    @test isnan(X) == [trues(6);falses(5)]
     @test X[7:11] == 1:5
     X = get(A, (2:4, 9:-2:-13), 0)
     Xv = zeros(Int, 3, 12)
     Xv[1:2, 2:5] = A[2:3, 7:-2:1]
     @test X == Xv
-    X2 = get(A, Vector{Int}[[2:4], [9:-2:-13]], 0)
+    X2 = get(A, Vector{Int}[[2:4;], [9:-2:-13;]], 0)
     @test X == X2
 end
 
@@ -220,7 +220,7 @@ v = shift!(l)
 
 # concatenation
 @test isequal([ones(2,2)  2*ones(2,1)], [1. 1 2; 1 1 2])
-@test isequal([ones(2,2), 2*ones(1,2)], [1. 1; 1 1; 2 2])
+@test isequal([ones(2,2); 2*ones(1,2)], [1. 1; 1 1; 2 2])
 
 # typed array literals
 X = Float64[1 2 3]
@@ -526,9 +526,9 @@ begin
                   3 3 4 4 3 3 4 4;
                   3 3 4 4 3 3 4 4]
 
-    A = reshape([1:8], 2, 2, 2)
+    A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = [1, 1, 2], outer = [1, 1, 1])
-    T = reshape([1:4, 1:4, 5:8, 5:8], 2, 2, 4)
+    T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
     @test R == T
     A = Array(Int, 2, 2, 2)
     A[:, :, 1] = [1 2;
@@ -719,9 +719,9 @@ end
 for idx in {1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
             8:9, 9:10, 6:9, 7:10}
     for repl in {[], [11], [11,22], [11,22,33,44,55]}
-        a = [1:10]; acopy = copy(a)
+        a = [1:10;]; acopy = copy(a)
         @test splice!(a, idx, repl) == acopy[idx]
-        @test a == [acopy[1:(first(idx)-1)], repl, acopy[(last(idx)+1):end]]
+        @test a == [acopy[1:(first(idx)-1)]; repl; acopy[(last(idx)+1):end]]
     end
 end
 
@@ -745,15 +745,15 @@ end
 
 # reverse
 @test reverse([2,3,1]) == [1,3,2]
-@test reverse([1:10],1,4) == [4,3,2,1,5,6,7,8,9,10]
-@test reverse([1:10],3,6) == [1,2,6,5,4,3,7,8,9,10]
-@test reverse([1:10],6,10) == [1,2,3,4,5,10,9,8,7,6]
+@test reverse([1:10;],1,4) == [4,3,2,1,5,6,7,8,9,10]
+@test reverse([1:10;],3,6) == [1,2,6,5,4,3,7,8,9,10]
+@test reverse([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
 @test reverse(1:10,1,4) == [4,3,2,1,5,6,7,8,9,10]
 @test reverse(1:10,3,6) == [1,2,6,5,4,3,7,8,9,10]
 @test reverse(1:10,6,10) == [1,2,3,4,5,10,9,8,7,6]
-@test reverse!([1:10],1,4) == [4,3,2,1,5,6,7,8,9,10]
-@test reverse!([1:10],3,6) == [1,2,6,5,4,3,7,8,9,10]
-@test reverse!([1:10],6,10) == [1,2,3,4,5,10,9,8,7,6]
+@test reverse!([1:10;],1,4) == [4,3,2,1,5,6,7,8,9,10]
+@test reverse!([1:10;],3,6) == [1,2,6,5,4,3,7,8,9,10]
+@test reverse!([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
 
 # flipdim
 @test isequal(flipdim([2,3,1], 1), [1,3,2])

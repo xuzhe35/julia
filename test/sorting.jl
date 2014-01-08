@@ -17,7 +17,7 @@
 
 for (rg,I) in {(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4), (3+0*(1:5),-5:.5:4)}
     rg_r = reverse(rg)
-    rgv, rgv_r = [rg], [rg_r]
+    rgv, rgv_r = [rg;], [rg_r;]
     for i = I
         @test searchsorted(rg,i) == searchsorted(rgv,i)
         @test searchsorted(rg_r,i,rev=true) == searchsorted(rgv_r,i,rev=true)
@@ -99,7 +99,7 @@ end
 
 srand(0xdeadbeef)
 
-for n in [0:10, 100, 101, 1000, 1001]
+for n in [0:10; 100; 101; 1000; 1001]
     r = 1:10
     v = rand(1:10,n)
     h = hist(v,r)

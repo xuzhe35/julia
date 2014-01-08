@@ -161,7 +161,7 @@ function getindex{T}(A::LU{T}, d::Symbol)
     d == :L && return tril(A.factors[1:m, 1:min(m,n)], -1) + eye(T, m, min(m,n))
     d == :U && return triu(A.factors[1:min(m,n),1:n])
     if d == :p
-        p = [1:m]
+        p = [1:m;]
         for i in 1:length(A.ipiv)
             p[i], p[A.ipiv[i]] = p[A.ipiv[i]], p[i]
         end
@@ -323,8 +323,8 @@ function \{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
         tmin, smin, cmin = LAPACK.laic1!(2, sub(xmin, 1:rnk), tmin, sub(A.hh, 1:rnk, rnk + 1), A.hh[rnk + 1, rnk + 1])
         tmax, smax, cmax = LAPACK.laic1!(1, sub(xmax, 1:rnk), tmax, sub(A.hh, 1:rnk, rnk + 1), A.hh[rnk + 1, rnk + 1])
         tmax*rcond > tmin && break
-        xmin[1:rnk + 1] = [smin*sub(xmin, 1:rnk), cmin]
-        xmax[1:rnk + 1] = [smax*sub(xmin, 1:rnk), cmax]
+        xmin[1:rnk + 1] = [smin*sub(xmin, 1:rnk); cmin]
+        xmax[1:rnk + 1] = [smax*sub(xmin, 1:rnk); cmax]
         rnk += 1
         # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
     end

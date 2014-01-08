@@ -1,7 +1,7 @@
 # tests related to functional programming functions and styles
 
 # map -- array.jl
-@test isequal(map((x)->"$x"[end:end], [9:11]), ["9", "0", "1"])
+@test isequal(map((x)->"$x"[end:end], 9:11), ["9", "0", "1"])
 # TODO: @test map!()
 # map -- ranges.jl
 @test isequal(map(i->sqrt(i), 1:5), [sqrt(i) for i in 1:5])
@@ -23,16 +23,16 @@ end
 @test map((c)->char(c+1), "abcDEF") == "bcdEFG"
 
 # folds -- reduce.jl
-@test foldl(-,[1:5]) == -13
-@test foldl(-,10,[1:5]) == foldl(-,[10,1:5])
+@test foldl(-,1:5) == -13
+@test foldl(-,10,1:5) == foldl(-,[10;1:5])
 
-@test foldr(-,[1:5]) == 3
-@test foldr(-,10,[1:5]) == foldr(-,[1:5,10])
+@test foldr(-,1:5) == 3
+@test foldr(-,10,1:5) == foldr(-,[1:5;10])
 
 # reduce -- reduce.jl
-@test reduce((x,y)->"($x+$y)", [9:11]) == "((9+10)+11)"
+@test reduce((x,y)->"($x+$y)", 9:11) == "((9+10)+11)"
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
-@test reduce(+, 1000, [1:5]) == (1000 + 1 + 2 + 3 + 4 + 5)
+@test reduce(+, 1000, 1:5) == (1000 + 1 + 2 + 3 + 4 + 5)
 
 # mapreduce -- reduce.jl
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
