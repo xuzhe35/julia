@@ -845,14 +845,10 @@
                              (loop (list 'typed_dict ex))
                              (loop (list 'ref ex)))
                          (case (car al)
+                           ((vect)  (loop (list* 'ref ex (cdr al))))
                            ((dict)  (loop (list* 'typed_dict ex (cdr al))))
                            ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
-                           ((vcat)
-                            (if (any (lambda (x)
-                                       (and (pair? x) (eq? (car x) 'row)))
-                                     (cdr al))
-                                (loop (list* 'typed_vcat ex (cdr al)))
-                                (loop (list* 'ref ex (cdr al)))))
+                           ((vcat)  (loop (list* 'typed_vcat ex (cdr al))))
                            ((comprehension)
                             (loop (list* 'typed_comprehension ex (cdr al))))
                            ((dict_comprehension)
@@ -1289,21 +1285,20 @@
 		       (error (string "missing comma or " closer
 				      " in argument list"))))))))))
 
-; parse [] concatenation expressions and {} cell expressions
-(define (parse-vcat s first closer)
+(define (parse-vect s first closer)
   (let loop ((lst '())
 	     (nxt first))
     (let ((t (require-token s)))
       (if (eqv? t closer)
 	  (begin (take-token s)
-		 (cons 'vcat (reverse (cons nxt lst))))
+		 (cons 'vect (reverse (cons nxt lst))))
 	  (case t
 	    ((#\,)
 	     (take-token s)
 	     (if (eqv? (require-token s) closer)
 		 ;; allow ending with ,
 		 (begin (take-token s)
-			(cons 'vcat (reverse (cons nxt lst))))
+			(cons 'vect (reverse (cons nxt lst))))
 		 (loop (cons nxt lst) (parse-eq* s))))
 	    ((#\;)
 	     (error "unexpected semicolon in array expression"))
@@ -1313,7 +1308,7 @@
 	     (error "missing separator in array expression")))))))
 
 (define (parse-dict s first closer)
-  (let ((v (parse-vcat s first closer)))
+  (let ((v (parse-vect s first closer)))
     (if (any dict-literal? (cdr v))
         (if (every dict-literal? (cdr v))
             `(dict ,@(cdr v))
@@ -1349,7 +1344,7 @@
 		 (if (pair? outer)
 		     (fix 'vcat (update-outer vec outer))
 		     (if (or (null? vec) (null? (cdr vec)))
-			 (fix 'vcat vec)     ; [x]   => (vcat x)
+			 (fix 'vect vec)     ; [x]   => (vect x)
 			 (fix 'hcat vec))))  ; [x y] => (hcat x y)
 	  (case t
 	    ((#\; #\newline)
@@ -1390,8 +1385,8 @@
                 (else
                  (parse-dict s first closer)))
               (case (peek-token s)
-                ((#\,)
-                 (parse-vcat s first closer))
+                ((#\, closer)
+                 (parse-vect s first closer))
                 ((for)
                  (take-token s)
                  (parse-comprehension s first closer))
@@ -1663,6 +1658,7 @@
                  (if (null? vex)
                      '(cell1d)
                      (case (car vex)
+                       ((vect)  `(cell1d ,@(cdr vex)))
                        ((comprehension)
                         `(typed_comprehension (top Any) ,@(cdr vex)))
                        ((dict_comprehension)
@@ -1698,7 +1694,7 @@
 	  ((eqv? t #\[ )
 	   (take-token s)
 	   (let ((vex (parse-cat s #\])))
-             (if (null? vex) '(vcat) vex)))
+             (if (null? vex) '(vect) vex)))
 
 	  ;; string literal
 	  ((eqv? t #\")

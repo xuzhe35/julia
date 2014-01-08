@@ -6,6 +6,45 @@ typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
 
 ## Basic functions ##
 
+vect() = Array(None, 0)
+vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
+
+const _oldstyle_array_vcat_ = true
+
+if _oldstyle_array_vcat_
+    function oldstyle_vcat_warning(n::Int)
+        if n == 1
+            before = "a"
+            after  = "a;"
+        elseif n == 2
+            before = "a,b"
+            after  = "a;b"
+        else
+            before = "a,b,..."
+            after  = "a;b;..."
+        end
+        warn_once("[$before] concatenation is deprecated; use [$after] instead")
+    end
+    function vect(A::AbstractArray...)
+        oldstyle_vcat_warning(length(A))
+        vcat(A...)
+    end
+    function vect(X...)
+        for a in X
+            if typeof(a) <: AbstractArray
+                oldstyle_vcat_warning(length(X))
+                break
+            end
+        end
+        vcat(X...)
+    end
+else
+    function vect(X...)
+        T = promote_type(map(typeof, X)...)
+        T[ X[i] for i=1:length(X) ]
+    end
+end
+
 size{T,n}(t::AbstractArray{T,n}, d) = (d>n ? 1 : size(t)[d])
 eltype(x) = Any
 eltype{T,n}(::AbstractArray{T,n}) = T
@@ -791,6 +830,11 @@ end
 ## cat: general case
 
 function cat(catdim::Integer, X...)
+    T = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
+    cat_t(catdim, T, X...)
+end
+
+function cat_t(catdim::Integer, typeC::Type, X...)
     nargs = length(X)
     dimsX = map((a->isa(a,AbstractArray) ? size(a) : (1,)), X)
     ndimsX = map((a->isa(a,AbstractArray) ? ndims(a) : 1), X)
@@ -834,7 +878,6 @@ function cat(catdim::Integer, X...)
 
     ndimsC = max(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Int...)
-    typeC = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
     C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, dimsC)
 
     range = 1
@@ -850,12 +893,15 @@ end
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
+typed_vcat(T::Type, X...) = cat_t(1, T, X...)
+typed_hcat(T::Type, X...) = cat_t(2, T, X...)
+
 cat{T}(catdim::Integer, A::AbstractArray{T}...) = cat_t(catdim, T, A...)
 
 cat(catdim::Integer, A::AbstractArray...) =
     cat_t(catdim, promote_type(map(eltype, A)...), A...)
 
-function cat_t(catdim::Integer, typeC, A::AbstractArray...)
+function cat_t(catdim::Integer, typeC::Type, A::AbstractArray...)
     # ndims of all input arrays should be in [d-1, d]
 
     nargs = length(A)
@@ -915,6 +961,9 @@ end
 
 vcat(A::AbstractArray...) = cat(1, A...)
 hcat(A::AbstractArray...) = cat(2, A...)
+
+typed_vcat(T::Type, A::AbstractArray...) = cat_t(1, T, A...)
+typed_hcat(T::Type, A::AbstractArray...) = cat_t(2, T, A...)
 
 # 2d horizontal and vertical concatenation
 
@@ -1003,21 +1052,19 @@ function hvcat_fill(a, xs)
     a
 end
 
-function hvcat(rows::(Int...), xs::Number...)
+function typed_hvcat(T::Type, rows::(Int...), xs...)
     nr = length(rows)
     nc = rows[1]
-    #error check
     for i = 2:nr
         if nc != rows[i]
             error("row ", i, " has mismatched number of columns")
         end
     end
-    T = typeof(xs[1])
-    for i=2:length(xs)
-        T = promote_type(T,typeof(xs[i]))
-    end
     hvcat_fill(Array(T, nr, nc), xs)
 end
+
+hvcat(rows::(Int...), xs::Number...) =
+    typed_hvcat(promote_type(map(typeof, xs)...), rows, xs...)
 
 ## Reductions and scans ##
 
