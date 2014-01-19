@@ -1761,19 +1761,20 @@ end
 _pure_builtins = {getfield, tuple, tupleref, tuplelen, fieldtype, apply_type}
 
 # detect some important side-effect-free calls
-function effect_free(e::ANY, sv)
+function effect_free(e::ANY, sv, any_expr::Bool)
     if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,String) ||
         isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type)
         return true
     end
-    if isa(e,Expr)
+    if any_expr && isa(e,Expr)
+        e = e::Expr
         if e.head === :static_typeof
             return true
         end
         ea = e.args
         if e.head === :call || e.head === :call1
             for a in ea
-                if !effect_free(a,sv)
+                if !effect_free(a,sv,true)
                     return false
                 end
             end
@@ -1782,7 +1783,7 @@ function effect_free(e::ANY, sv)
             end
         elseif e.head === :new
             for a in ea
-                if !effect_free(a,sv)
+                if !effect_free(a,sv,true)
                     return false
                 end
             end
@@ -1816,7 +1817,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         return (e.args[3],())
     end
     if isdefined(Main.Base,:isbits) && is(f,Main.Base.isbits) &&
-        length(atypes)==1 && isType(atypes[1]) && effect_free(argexprs[1],sv) &&
+        length(atypes)==1 && isType(atypes[1]) && effect_free(argexprs[1],sv,true) &&
         isleaftype(atypes[1].parameters[1])
         return (isbits(atypes[1].parameters[1]),())
     end
@@ -1835,7 +1836,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             end
         end
     end
-    if is(f,tuple) && isa(e.typ,Tuple) && all(isType,e.typ) && isleaftype(e.typ) && effect_free(e,sv)
+    if is(f,tuple) && isa(e.typ,Tuple) && all(isType,e.typ) && isleaftype(e.typ) && effect_free(e,sv,true)
         return (map(t->t.parameters[1], e.typ), ())
     end
     if isa(f,IntrinsicFunction)
@@ -2006,20 +2007,18 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             end
         end
 
+        # ok for argument to occur more than once if the actual argument
+        # is a symbol or constant
         occ = occurs_more(body, x->is(x,a), 1)
-        if occ != 1 || islocal
-            # ok for argument to occur more than once if the actual argument
-            # is a symbol or constant
-            if islocal || !effect_free(aei,sv) || (occ==0 && is(aeitype,None))
+        if islocal || !effect_free(aei,sv,false) || (occ==0 && is(aeitype,None))
+            if occ != 0
                 # introduce variable for this argument
-                if occ != 0
-                    vnew = unique_name(enclosing_ast, ast)
-                    add_variable(enclosing_ast, vnew, aeitype, !islocal)
-                    push!(stmts, Expr(:(=), vnew, aei))
-                    argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
-                elseif !isType(aeitype) && !effect_free(aei,sv)
-                    push!(stmts, aei)
-                end
+                vnew = unique_name(enclosing_ast, ast)
+                add_variable(enclosing_ast, vnew, aeitype, !islocal)
+                push!(stmts, Expr(:(=), vnew, aei))
+                argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
+            elseif !(isType(aeitype) || effect_free(aei,sv,true))
+                push!(stmts, aei)
             end
         end
     end
@@ -2255,7 +2254,7 @@ function inlining_pass(e::Expr, sv, ast)
                     if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
                         # apply(f,tuple(x,y,...)) => f(x,y,...)
                         newargs[i-2] = aarg.args[2:end]
-                    elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv)
+                    elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)
                         # apply(f,t::(x,y)) => f(t[1],t[2])
                         newargs[i-2] = { mk_tupleref(aarg,j) for j=1:length(t) }
                     else
