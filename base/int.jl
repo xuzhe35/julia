@@ -581,6 +581,9 @@ end
 
 ## checked +, - and *
 
+checked_sub(x,y) = x-y
+checked_add(x,y) = x+y
+
 for T in (Int8,Int16,Int32,Int64)#,Int128) ## FIXME: #4905
     @eval begin
         checked_add(x::$T, y::$T) = box($T,checked_sadd(unbox($T,x),unbox($T,y)))

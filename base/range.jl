@@ -19,43 +19,46 @@ immutable Range{T<:Real} <: Ranges{T}
 end
 Range{T}(start::T, step, len::Integer) = Range{T}(start, step, len)
 
-immutable Range1{T<:Real} <: Ranges{T}
+immutable Range1{T<:Integer} <: Ranges{T}
     start::T
-    len::Int
+    stop::T
 
     function Range1(start::T, len::Int)
         if len < 0; error("length must be non-negative"); end
-        new(start, len)
+        new(start, checked_add(start,len-1))
     end
     Range1(start::T, len::Integer) = Range1(start, int(len))
 
     # TODO: this is a hack to elide the len<0 check for colon.
     # should store start and stop for integer ranges instead
-    Range1(start::T, len::Integer, _) = new(start, int(len))
+    Range1(start::T, stop::T, _) = new(start, stop)
 end
 Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
+
+isempty(r::Range1) = r.stop<r.start
+length(r::Range1) = ifelse(isempty(r), 0, checked_add(convert(Int,checked_sub(r.stop,r.start)),1))
 
 function colon{T<:Integer}(start::T, step::T, stop::T)
     step != 0 || error("step cannot be zero in colon syntax")
     Range{T}(start, step, max(0, 1 + fld(stop-start, step)))
 end
 
-colon{T<:Integer}(start::T, stop::T) =
-    Range1{T}(start, ifelse(stop<start, 0, int(stop-start+1)))
+colon{T<:Integer}(start::T, stop::T) = Range1{T}(start, stop, 0)
+#    Range1{T}(start, ifelse(stop<start, 0, int(stop-start+1)))
 
-if Int === Int32
-colon{T<:Union(Int8,Int16,Int32,Uint8,Uint16)}(start::T, stop::T) =
-    Range1{T}(start,
-              ifelse(stop<start, 0,
-                     checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
-              0)  # hack to elide negative length check
-else
-colon{T<:Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)}(start::T, stop::T) =
-    Range1{T}(start,
-              ifelse(stop<start, 0,
-                     checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
-              0)  # hack to elide negative length check
-end
+# if Int === Int32
+# colon{T<:Union(Int8,Int16,Int32,Uint8,Uint16)}(start::T, stop::T) =
+#     Range1{T}(start,
+#               ifelse(stop<start, 0,
+#                      checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
+#               0)  # hack to elide negative length check
+# else
+# colon{T<:Union(Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32)}(start::T, stop::T) =
+#     Range1{T}(start,
+#               ifelse(stop<start, 0,
+#                      checked_add(checked_sub(convert(Int,stop),convert(Int,start)),1)),
+#               0)  # hack to elide negative length check
+# end
 
 function colon{T<:Real}(start::T, step::T, stop::T)
     step != 0 || error("step cannot be zero in colon syntax")
@@ -98,7 +101,7 @@ function colon{T<:Real}(start::T, stop::T)
             error("length ",n," is too large")
         end
     end
-    Range1(start, len)
+    Range(start, one(T), len)
 end
 
 colon(start::Real, step::Real, stop::Real) = colon(promote(start, step, stop)...)
@@ -107,10 +110,10 @@ colon(start::Real, stop::Real) = colon(promote(start, stop)...)
 similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)
 
 length(r::Ranges) = r.len
-size(r::Ranges) = (r.len,)
+size(r::Ranges) = (length(r),)
 isempty(r::Ranges) = r.len==0
 first(r::Ranges) = r.start
-last{T}(r::Range1{T}) = oftype(T, r.start + r.len-1)
+last{T}(r::Range1{T}) = r.stop
 last{T}(r::Range{T})  = oftype(T, r.start + (r.len-1)*r.step)
 
 step(r::Range)  = r.step
@@ -130,18 +133,15 @@ copy(r::Ranges) = r
 getindex(r::Ranges, i::Real) = getindex(r, to_index(i))
 
 function getindex{T}(r::Ranges{T}, i::Integer)
-    if !(1 <= i <= r.len); error(BoundsError); end
+    if !(1 <= i <= length(r)); error(BoundsError); end
     oftype(T, r.start + (i-1)*step(r))
 end
 
 function getindex(r::Range1, s::Range1{Int})
-    if s.len > 0
-        if !(1 <= last(s) <= r.len)
-            throw(BoundsError())
-        end
-        Range1(r[s.start], s.len)
+    if !isempty(s)
+        Range1(r[s.start], r[s.stop])
     else
-        Range1(r.start + s.start-1, s.len)
+        Range1(r.start + s.start-1, r.start + s.start-2)
     end
 end
 
@@ -167,17 +167,17 @@ show(io::IO, r::Range1) = print(io, repr(r.start),':',repr(last(r)))
 
 start(r::Ranges) = 0
 next{T}(r::Range{T},  i) = (oftype(T, r.start + i*step(r)), i+1)
-next{T}(r::Range1{T}, i) = (oftype(T, r.start + i), i+1)
+#next{T}(r::Range1{T}, i) = (oftype(T, r.start + i), i+1)
 done(r::Ranges, i) = (length(r) <= i)
 
 # though these look very similar to the above, for some reason LLVM generates
 # much better code for these.
-start{T<:Integer}(r::Range1{T}) = r.start
-next{T<:Integer}(r::Range1{T}, i) = (i, oftype(T, i+1))
-done{T<:Integer}(r::Range1{T}, i) = i==oftype(T, r.start+r.len)
+start{T<:Integer}(r::Range1{T}) = (false, r.start)
+next{T<:Integer}(r::Range1{T}, i) = (tupleref(i,2), (true, oftype(T, tupleref(i,2)+1)))
+done{T<:Integer}(r::Range1{T}, i) = (r.stop<r.start) | (tupleref(i,1) & (tupleref(i,2)==oftype(T, r.stop+1)))
 
 ==(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)
-==(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
+==(r::Range1, s::Range1) = (r.start==s.start) & (r.stop==s.stop)
 
 # TODO: isless?
 
@@ -308,30 +308,32 @@ end
 -(r::Ranges) = Range(-r.start, -step(r), r.len)
 
 +(x::Real, r::Range ) = Range(x+r.start, r.step, r.len)
-+(x::Real, r::Range1) = Range1(x+r.start, r.len)
++(x::Real, r::Range1) = Range1(x+r.start, x+r.stop)
 +(r::Ranges, x::Real) = x+r
 
 -(x::Real, r::Ranges) = Range(x-r.start, -step(r), r.len)
 -(r::Range , x::Real) = Range(r.start-x, r.step, r.len)
--(r::Range1, x::Real) = Range1(r.start-x, r.len)
+-(r::Range1, x::Real) = Range1(r.start-x, r.stop-x)
 
-.*(x::Real, r::Ranges) = Range(x*r.start, x*step(r), r.len)
+.*(x::Real, r::Ranges) = Range(x*r.start, x*step(r), length(r))
 .*(r::Ranges, x::Real) = x*r
 
-./(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.len)
+./(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, length(r))
 
 function +(r1::Ranges, r2::Ranges)
-    if r1.len != r2.len
+    l = length(r1)
+    if l != length(r2)
         error("argument dimensions must match")
     end
-    Range(r1.start+r2.start, step(r1)+step(r2), r1.len)
+    Range(r1.start+r2.start, step(r1)+step(r2), l)
 end
 
 function -(r1::Ranges, r2::Ranges)
-    if r1.len != r2.len
+    l = length(r1)
+    if l != length(r2)
         error("argument dimensions must match")
     end
-    Range(r1.start-r2.start, step(r1)-step(r2), r1.len)
+    Range(r1.start-r2.start, step(r1)-step(r2), l)
 end
 
 ## non-linear operations on ranges ##
@@ -389,7 +391,7 @@ function vcat{T}(rs::Ranges{T}...)
     return a
 end
 
-reverse{T<:Real}(r::Ranges{T}) = Range(last(r), -step(r), r.len)
+reverse{T<:Real}(r::Ranges{T}) = Range(last(r), -step(r), length(r))
 
 ## sorting ##
 
