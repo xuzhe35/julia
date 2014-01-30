@@ -105,9 +105,9 @@ r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test length(1:4:typemax(Int)) == div(typemax(Int),4) + 1
 
 # overflow in length
-@test_throws 0:typemax(Int)
-@test_throws typemin(Int):typemax(Int)
-@test_throws -1:typemax(Int)-1
+@test_throws length(0:typemax(Int))
+@test_throws length(typemin(Int):typemax(Int))
+@test_throws length(-1:typemax(Int)-1)
 
 # parity between ranges and for loops (see issue #5355)
 

@@ -137,28 +137,28 @@ function getindex{T}(r::Ranges{T}, i::Integer)
     oftype(T, r.start + (i-1)*step(r))
 end
 
-function getindex(r::Range1, s::Range1{Int})
+function getindex{T}(r::Range1{T}, s::Range1{Int})
     if !isempty(s)
-        Range1(r[s.start], r[s.stop])
+        Range1{T}(r[s.start], r[s.stop], 0)
     else
-        Range1(r.start + s.start-1, r.start + s.start-2)
+        Range1{T}(r.start + s.start-1, r.start + s.start-2, 0)
     end
 end
 
 function getindex(r::Ranges, s::Ranges{Int})
-    if s.len > 0
-        if !(1 <= last(s) <= r.len)
+    if !isempty(s)
+        if !(1 <= last(s) <= length(r))
             throw(BoundsError())
         end
-        Range(r[s.start], step(r)*step(s), s.len)
+        Range(r[s.start], step(r)*step(s), length(s))
     else
-        Range(r.start + (s.start-1)*step(r), step(r)*step(s), s.len)
+        Range(r.start + (s.start-1)*step(r), step(r)*step(s), length(s))
     end
 end
 
 function show(io::IO, r::Range)
     if step(r) == 0
-        print(io, "Range(",r.start,",",step(r),",",r.len,")")
+        print(io, "Range(",r.start,",",step(r),",",length(r),")")
     else
         print(io, repr(r.start),':',repr(step(r)),':',repr(last(r)))
     end
@@ -176,8 +176,8 @@ start{T<:Integer}(r::Range1{T}) = (false, r.start)
 next{T<:Integer}(r::Range1{T}, i) = (tupleref(i,2), (true, oftype(T, tupleref(i,2)+1)))
 done{T<:Integer}(r::Range1{T}, i) = (r.stop<r.start) | (tupleref(i,1) & (tupleref(i,2)==oftype(T, r.stop+1)))
 
-==(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)
-==(r::Range1, s::Range1) = (r.start==s.start) & (r.stop==s.stop)
+==(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (length(r)==length(s))
+==(r::Range1, s::Range1) = (r.start==s.start) & ((r.stop==s.stop) | (isempty(r)&isempty(s)))
 
 # TODO: isless?
 
@@ -305,15 +305,15 @@ end
 
 ## linear operations on ranges ##
 
--(r::Ranges) = Range(-r.start, -step(r), r.len)
+-(r::Ranges) = Range(-r.start, -step(r), length(r))
 
 +(x::Real, r::Range ) = Range(x+r.start, r.step, r.len)
-+(x::Real, r::Range1) = Range1(x+r.start, x+r.stop)
++(x::Real, r::Range1) = Range1(x+r.start, length(r))
 +(r::Ranges, x::Real) = x+r
 
 -(x::Real, r::Ranges) = Range(x-r.start, -step(r), r.len)
 -(r::Range , x::Real) = Range(r.start-x, r.step, r.len)
--(r::Range1, x::Real) = Range1(r.start-x, r.stop-x)
+-(r::Range1, x::Real) = Range1(r.start-x, length(r))
 
 .*(x::Real, r::Ranges) = Range(x*r.start, x*step(r), length(r))
 .*(r::Ranges, x::Real) = x*r
