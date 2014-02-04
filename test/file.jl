@@ -254,13 +254,13 @@ close(f)
 ############
 # Clean up #
 ############
-rm(file)
-rmdir(subdir)
-rmdir(dir)
 @non_windowsxp_only begin
     rm(link)
     rm(dirlink)
 end
+rm(file)
+rmdir(subdir)
+rmdir(dir)
 
 @test !ispath(file)
 @test !ispath(dir)
