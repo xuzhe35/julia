@@ -113,30 +113,56 @@ end
 colon(start::Real, step::Real, stop::Real) = colon(promote(start, step, stop)...)
 colon(start::Real, stop::Real) = colon(promote(start, stop)...)
 
-function colon{T<:FloatingPoint}(start::T, step::T, stop::T)
-    step != 0 || error("step cannot be zero in colon syntax")
-    (step < 0) != (stop < start) && return FloatRange{T}(start,step,1,0)
+# float rationalization helper
+function rat(x)
+    y = x
+    a = d = one(x)
+    b = c = zero(x)
+    while true
+        f = itrunc(y); y -= f
+        a, c = f*a+c, a
+        b, d = f*b+d, b
+        (y == 0 || a/b == x) && return a, b
+        y = inv(y)
+    end
+end
+
+# float range "lifting" helper
+function frange(start, step, stop)
     ratio = (stop-start)/step
     divisor = one(step)
     rounded = round(ratio)
     len = floor(ratio)+1
-    local num
-    den, t, x = zero(step), one(step), abs(step)
+    lo = prevfloat((prevfloat(stop)-nextfloat(start))/rounded)
+    hi = nextfloat((nextfloat(stop)-prevfloat(start))/rounded)
+    lo <= step <= hi || return start, step, divisor, len
+    num, den = rat(step)
+    num/den == step || return start, step, divisor, len
+    n, d = rat(start)
+    n/d == start && (n*den+rounded*d*num)/(d*den) == stop &&
+        return n*den, d*num, d*den, rounded+1
+    k = 1
     while true
-        m = trunc(x); x -= m
-        t, den = den, m*den + t
-        num = round(den*step)
-        (x == 0 || num/den == step) && break
-        x = inv(x)
+        n, d = k*num, k*den
+        delta = n*rounded
+        a = d*start
+        b = d*stop-delta
+        c = (a+b)/2
+        a/d == start && (a+delta)/d == stop && return a, n, d, rounded+1
+        b/d == start && (b+delta)/d == stop && return b, n, d, rounded+1
+        c/d == start && (c+delta)/d == stop && return c, n, d, rounded+1
+        c/d < start && stop < (c+delta)/d && break
+        start < c/d && (c+delta)/d < stop && break
+        k += 1
     end
-    if (start*den + rounded*num)/den == stop &&
-       (stop*den - start*den)/rounded/den == step
-        start *= den
-        step = num
-        divisor = den
-        len = rounded+1
-    end
-    FloatRange{T}(start,step,divisor,len)
+    return start, step, divisor, len
+end
+
+function colon{T<:FloatingPoint}(start::T, step::T, stop::T)
+    step != 0 || error("step cannot be zero in colon syntax")
+    (0 < step) != (start <= stop) ?
+        FloatRange{T}(start,step,1,start==stop) :
+        FloatRange{T}(frange(start,step,stop)...)
 end
 
 similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)

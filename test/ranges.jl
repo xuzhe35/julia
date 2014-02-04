@@ -175,7 +175,7 @@ end
 @test 0.0:1.0:0.5   == [0.0]
 
 @test prevfloat(0.1):0.1:0.3 == [prevfloat(0.1), 0.2, 0.3]
-@test nextfloat(0.1):0.1:0.3 == [nextfloat(0.1), 0.2]
+@test nextfloat(0.1):0.1:0.3 == [nextfloat(0.1), 0.2, 0.3]
 @test prevfloat(0.0):0.1:0.3 == [prevfloat(0.0), 0.1, 0.2, 0.3]
 @test nextfloat(0.0):0.1:0.3 == [nextfloat(0.0), 0.1, 0.2, 0.3]
 @test 0.1:0.1:prevfloat(0.3) == [0.1, 0.2]
@@ -186,3 +186,7 @@ end
 @test 0.1:nextfloat(0.1):0.3 == [0.1, 0.2]
 @test 0.0:prevfloat(0.1):0.3 == [0.0, prevfloat(0.1), prevfloat(0.2), 0.3]
 @test 0.0:nextfloat(0.1):0.3 == [0.0, nextfloat(0.1), nextfloat(0.2)]
+
+for a = -10:25, s = [-10:-1;1:25], d = 1:25, n = 1:25
+    @test [a/d:s/d:(a+(n-1)*s)/d] == [a:s:a+(n-1)*s]./d
+end
