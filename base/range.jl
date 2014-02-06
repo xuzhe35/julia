@@ -118,13 +118,15 @@ function rat(x)
     y = x
     a = d = one(x)
     b = c = zero(x)
-    while true
-        f = itrunc(y); y -= f
+    while max(abs(a),abs(b)) < maxintfloat(x)
+        f = trunc(y)
+        y -= f
         a, c = f*a+c, a
         b, d = f*b+d, b
         (y == 0 || a/b == x) && return a, b
         y = inv(y)
     end
+    return c, d
 end
 
 # float range "lifting" helper
